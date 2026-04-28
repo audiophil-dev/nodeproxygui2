@@ -397,6 +397,9 @@ NodeProxyGui2 {
 
 		if(parameterSection.notNil, { parameterSection.remove });
 		innerView = this.makeParameterViews().resizeToHint;
+		// Pin height to sizeHint so sliders cannot grow when the parent layout
+		// distributes surplus vertical space. When the natural height exceeds
+		// half the screen, a ScrollView provides the necessary overflow container.
 		if(innerView.sizeHint.height > (Window.availableBounds.height * 0.5), {
 			parameterSection = ScrollView.new().canvas_(innerView);
 			parameterSection.maxHeight_((Window.availableBounds.height * 0.5).asInteger);
