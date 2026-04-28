@@ -358,7 +358,6 @@ NodeProxyGui2 {
 	makeParameterSection {
 		var excluded = defaultExcludeParams ++ prExcludeParams;
 		var numParams = params.flatSize;
-		var sectionSize;
 
 		params.do{ | spec | spec.removeDependant(specChangedFunc) };
 		params.clear;
@@ -396,18 +395,20 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
-		parameterSection = this.makeParameterViews();
-		sectionSize = parameterSection.sizeHint;
-		parameterSection = ScrollView.new().canvas_(parameterSection);
-		window.layout.add(parameterSection, 1);
-
-		if(window.view.parent.isNil, {  //resize only when not embedded
-			window.view.bounds = window.view.bounds.resizeTo(
-				window.view.bounds.width,
-				(sectionSize.height + headerHeight + 30)  //30 compensate default spacing
-				.min(Window.availableBounds.height)
-			);
+		parameterSection = this.makeParameterViews().resizeToHint;
+		if(parameterSection.sizeHint.height > (Window.availableBounds.height * 0.5), {
+			var sv = ScrollView.new().canvas_(parameterSection);
+			sv.fixedHeight_((Window.availableBounds.height * 0.5).asInteger);
+			parameterSection = sv;
 		});
+		window.layout.add(parameterSection, 0);
+		{
+			if(parameterSection.isKindOf(ScrollView), {
+				window.view.maxHeight_(window.view.sizeHint.height)
+			}, {
+				window.view.fixedHeight_(window.view.sizeHint.height)
+			})
+		}.defer(0.07);
 	}
 
 	makeParameterViews {
