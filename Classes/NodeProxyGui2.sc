@@ -358,6 +358,7 @@ NodeProxyGui2 {
 	makeParameterSection {
 		var excluded = defaultExcludeParams ++ prExcludeParams;
 		var numParams = params.flatSize;
+		var innerView;
 
 		params.do{ | spec | spec.removeDependant(specChangedFunc) };
 		params.clear;
@@ -395,17 +396,18 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
-		parameterSection = this.makeParameterViews().resizeToHint;
-		if(parameterSection.sizeHint.height > (Window.availableBounds.height * 0.5), {
-			var sv = ScrollView.new().canvas_(parameterSection);
-			sv.fixedHeight_((Window.availableBounds.height * 0.5).asInteger);
-			parameterSection = sv;
+		innerView = this.makeParameterViews().resizeToHint;
+		if(innerView.sizeHint.height > (Window.availableBounds.height * 0.5), {
+			parameterSection = ScrollView.new().canvas_(innerView);
+			parameterSection.maxHeight_((Window.availableBounds.height * 0.5).asInteger);
+			window.layout.add(parameterSection, 1);
+		}, {
+			parameterSection = innerView;
+			window.layout.add(parameterSection, 0);
 		});
-		window.layout.add(parameterSection, 0);
 		{
-			if(parameterSection.isKindOf(ScrollView), {
-				window.view.maxHeight_(window.view.sizeHint.height)
-			}, {
+			innerView.fixedHeight_(innerView.sizeHint.height);
+			if(parameterSection.isKindOf(ScrollView).not, {
 				window.view.fixedHeight_(window.view.sizeHint.height)
 			})
 		}.defer(0.07);
