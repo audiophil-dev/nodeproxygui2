@@ -434,7 +434,9 @@ NodeProxyGui2 {
 		});
 
 		paramViews.clear;
-		params.sortedKeysValuesDo{ | key, spec |
+		nodeProxy.getKeysValues.select{ | kv | params.includesKey(kv[0]) }.do{ | keyVal |
+			var key = keyVal[0];
+			var spec = params[key];
 			var layout, paramVal;
 			var slider, valueBox, textField, staticText;
 			var sliders, valueBoxes;
