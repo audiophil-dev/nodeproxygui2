@@ -1,72 +1,122 @@
 // mwe_scroll_fix.scd
-// Minimal Working Example: ScrollView fix verification for NodeProxyGui2
-// embedded inside a parent view with a fixed height (the real use case).
+// Demonstrates the paramSectionMaxHeight fix for NPG2 embedded inside the SE's
+// 300px fixed-height outer ScrollView (KlongGenGui).
 //
-// Run this file in the SuperCollider IDE (Cmd+Enter on the whole block).
+// Replicates the exact SE call sequence:
+//   gui2(0, false, false, false, false)
+//   paramSectionMaxHeight_(177)          -- fix: cap param scroll area
+//   embed in SE layout structure
+//   excludeParams_([...])               -- triggers deferred makeParameterSection rebuild
+//   wait and report
 //
-// Expected post-window output (fix working):
-//   NodeProxyGui2 loaded from: .../nodeproxygui2/Classes/NodeProxyGui2.sc
-//   parameterSection class: ScrollView
-//   canvas height (innerH): NNN px   <-- larger than viewport
-//   viewport height:        MMM px
-//   canvas > viewport:      PASS
+// Without the fix: cv height = ~600px, overflows 300px outer scroll,
+//   inner scrollbar handle extends below clip boundary → inaccessible.
+// With the fix: cv height ≤ 300px, parameterSection scrollbar fully visible.
+//
+// Measured NPG2 layout overhead (header rows + VLayout spacing) = 123px.
+// Max paramSection height = 300 - 123 = 177px.
+//
+// Run in SC IDE with Cmd+Enter.
 (
-var nParams = 20;
-var proxyName = \mweScrollTest;
-var parentHeight = 400;   // fixed height imposed by the parent view
-var parentWindow, parentView, gui, ps, canvas, canvasH, viewportH;
+var proxyName = \mweScrollFix;
+var gui, ps, window;
+var scrollView, container, envGui, firstRow, innerLayout;
+var scrollHeight = 300;
 
-// --- 1. Confirm which source file SC loaded ---
 Post << "NodeProxyGui2 loaded from: " << NodeProxyGui2.filenameSymbol << "\n";
 
-s.waitForBoot({
-	// Build an Ndef with nParams float controls.
-	Ndef(proxyName, {
-		var snd = SinOsc.ar(440);
-		nParams.do({ |i|
-			snd = snd * NamedControl.kr(("p" ++ i).asSymbol, 1.0);
-		});
-		snd ! 2
-	});
+// 35 params — after excluding intOff/varOff/freq/amp (4), 31 remain.
+// 31 * ~24px = ~744px > 527px threshold → scroll triggers.
+Ndef(proxyName, {
+	|intOff=0, varOff=0, varVal=0, freq=0, amp=0,
+	 p5=0, p6=0, p7=0, p8=0, p9=0,
+	 p10=0, p11=0, p12=0, p13=0, p14=0,
+	 p15=0, p16=0, p17=0, p18=0, p19=0,
+	 p20=0, p21=0, p22=0, p23=0, p24=0,
+	 p25=0, p26=0, p27=0, p28=0, p29=0,
+	 p30=0, p31=0, p32=0, p33=0, p34=0|
+	Silent.ar
+});
 
-	0.3.wait;
+// --- SE outer structure (mirrors KlongGenGui layout) ---
+window = Window("MWE: paramSectionMaxHeight fix").front;
+window.layout = VLayout();
 
-	// --- 2. Parent window with a fixed-height container view ---
-	parentWindow = Window("MWE: embedded NPG2", Rect(100, 100, 400, parentHeight + 30));
-	parentView   = View(parentWindow, Rect(0, 0, 400, parentHeight));
-	parentView.fixedHeight_(parentHeight);
-	parentView.layout = VLayout();
+scrollView = ScrollView(nil, [0, 0, 100, 100]);
+container = View(nil);
+container.layout = HLayout();
 
-	// --- 3. Create NPG2 with show:false, embed contentView into parent ---
-	gui = NodeProxyGui2.new(Ndef(proxyName), show: false);
-	parentView.layout.add(gui.asView);
+envGui = View(nil, [0, 0, 100, 400]);
+envGui.layout = VLayout();
 
-	parentWindow.front;
+firstRow = View(nil, [0, 0, 100, 400]);
+firstRow.layout = HLayout();
+firstRow.layout.margins_([1, 1, 1, 1]);
+envGui.layout.add(firstRow);
 
-	// Wait for deferred layout pass (makeParameterSection defers 0.07 s).
-	0.2.wait;
+innerLayout = VLayout();
+firstRow.layout.add(innerLayout);
 
-	// --- 4. Inspect ---
+// --- Step 1: create gui2 exactly as prMakeMacroControls does ---
+gui = Ndef(proxyName).gui2(0, false, false, false, false);
+
+// --- Step 2: apply fix before embedding ---
+// NPG2 layout overhead (header rows + VLayout spacing) = 123px empirically.
+// 300px (outer scroll) - 123px (overhead) = 177px max for parameterSection.
+gui.paramSectionMaxHeight_(177);
+
+// --- Step 3: embed ---
+innerLayout.add(gui);
+firstRow.layout.add(nil);
+container.layout.add(envGui);
+scrollView.canvas = container;
+scrollView.hasVerticalScroller_(false);
+scrollView.fixedHeight_(scrollHeight);
+window.layout.add(scrollView);
+
+// --- Step 4: call excludeParams_ AFTER embedding, exactly as the SE does ---
+gui.excludeParams_([\intOff, \varOff, \freq, \amp]);
+
+// --- Step 5: report after the deferred makeParameterSection rebuild ---
+{
+	var cvH, psH;
 	ps = gui.parameterSection;
-	Post << "parameterSection class: " << ps.class << "\n";
+	cvH = gui.asView.bounds.height;
+	psH = ps.bounds.height;
+
+	Post << "\n--- After excludeParams_ rebuild ---\n";
+	Post << "cv total height:         " << cvH << " px\n";
+	Post << "parameterSection class:  " << ps.class << "\n";
+	Post << "parameterSection height: " << psH << " px\n";
+	Post << "NPG2 overhead (cv - ps): " << (cvH - psH) << " px\n";
 
 	if(ps.isKindOf(ScrollView), {
-		canvas    = ps.canvas;
-		canvasH   = canvas.bounds.height;
-		viewportH = ps.bounds.height;
-
-		Post << "canvas height (innerH): " << canvasH << " px\n";
-		Post << "viewport height:        " << viewportH << " px\n";
-		Post << "canvas > viewport:      ";
-		if(canvasH > viewportH, {
-			Post << "PASS\n";
-		}, {
-			Post << "FAIL  <-- canvas collapsed to viewport size; fix not active\n";
-		});
+		Post << "CHECK parameterSection is ScrollView: PASS\n";
 	}, {
-		Post << "parameterSection is NOT a ScrollView\n";
-		Post << "Half screen height threshold: " << (Window.availableBounds.height * 0.5) << " px\n";
-		Post << "Increase nParams or check makeParameterSection condition.\n";
+		Post << "CHECK parameterSection is ScrollView: FAIL\n";
 	});
-});
+
+	if(cvH <= scrollHeight, {
+		Post << "CHECK cv height " << cvH << " fits in " << scrollHeight << "px: PASS\n";
+	}, {
+		Post << "CHECK cv height " << cvH << " fits in " << scrollHeight << "px: FAIL\n";
+	});
+
+	if(psH <= 177, {
+		Post << "CHECK paramSection " << psH << " <= 177px cap: PASS\n";
+	}, {
+		Post << "CHECK paramSection " << psH << " <= 177px cap: FAIL\n";
+	});
+
+	if(ps.isKindOf(ScrollView), {
+		var canvasH = ps.canvas.bounds.height;
+		var viewportH = ps.bounds.height;
+		Post << "paramSection canvas: " << canvasH << "px  viewport: " << viewportH << "px\n";
+		if(canvasH > viewportH, {
+			Post << "CHECK inner scroll active (canvas > viewport): PASS\n";
+		}, {
+			Post << "CHECK inner scroll active (canvas > viewport): FAIL — all params visible, no scroll needed\n";
+		});
+	});
+}.defer(0.4);
 )
