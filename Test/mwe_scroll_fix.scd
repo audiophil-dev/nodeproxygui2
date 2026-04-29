@@ -1,34 +1,35 @@
 // mwe_scroll_fix.scd
 // Demonstrates the paramSectionMaxHeight fix for NPG2 embedded inside the SE's
-// 300px fixed-height outer ScrollView (KlongGenGui).
+// 200px fixed-height outer ScrollView (KlongGenGui).
 //
 // Replicates the exact SE call sequence:
 //   gui2(0, false, false, false, false)
-//   paramSectionMaxHeight_(175)          -- fix: cap param scroll area
+//   paramSectionMaxHeight_(75)           -- fix: cap param scroll area
 //   embed in SE layout structure
 //   excludeParams_([...])               -- triggers deferred makeParameterSection rebuild
 //   wait and report
 //
-// Without the fix: cv height = ~600px, overflows 300px outer scroll,
-//   inner scrollbar handle extends below clip boundary → inaccessible.
-// With the fix: cv height ≤ 300px, parameterSection scrollbar fully visible.
+// Without the fix: cv height = ~600px, overflows 200px outer scroll,
+//   inner scrollbar handle extends below clip boundary -> inaccessible.
+// With the fix: each KSEG fits in 200px, parameterSection scrollbar fully visible.
 //
-// Measured NPG2 layout overhead (header rows + VLayout spacing) = 123px.
-// Max paramSection height = 300 - 123 = 177px (NPG2-only overhead).
-// Full KSEG overhead (NPG2 + secondRow + thirdRow + VLayout) = 125px.
-// Max paramSection height = 300 - 125 = 175px.
+// Empirically measured:
+//   KSEG non-NPG2 overhead (secondRow + thirdRow + VLayout spacing) = 79px.
+//   NPG2 headerHeight = 46px.
+//   Max NPG2 cv = 200 - 79 = 121px.
+//   Max paramSection height = 121 - 46 = 75px.
 //
 // Run in SC IDE with Cmd+Enter.
 (
 var proxyName = \mweScrollFix;
 var gui, ps, window;
 var scrollView, container, envGui, firstRow, innerLayout;
-var scrollHeight = 300;
+var scrollHeight = 200;
 
 Post << "NodeProxyGui2 loaded from: " << NodeProxyGui2.filenameSymbol << "\n";
 
-// 35 params — after excluding intOff/varOff/freq/amp (4), 31 remain.
-// 31 * ~24px = ~744px > 527px threshold → scroll triggers.
+// 35 params -- after excluding intOff/varOff/freq/amp (4), 31 remain.
+// 31 * ~24px = ~744px > threshold -> scroll triggers.
 Ndef(proxyName, {
 	|intOff=0, varOff=0, varVal=0, freq=0, amp=0,
 	 p5=0, p6=0, p7=0, p8=0, p9=0,
@@ -63,9 +64,9 @@ firstRow.layout.add(innerLayout);
 gui = Ndef(proxyName).gui2(0, false, false, false, false);
 
 // --- Step 2: apply fix before embedding ---
-// NPG2 layout overhead (header rows + VLayout spacing) = 123px empirically.
-// 300px (outer scroll) - 123px (overhead) = 177px max for parameterSection.
-gui.paramSectionMaxHeight_(175);
+// KSEG non-NPG2 overhead = 79px. NPG2 headerHeight = 46px.
+// Max NPG2 cv = 200 - 79 = 121px. Max paramSection = 121 - 46 = 75px.
+gui.paramSectionMaxHeight_(75);
 
 // --- Step 3: embed ---
 innerLayout.add(gui);
@@ -104,10 +105,10 @@ gui.excludeParams_([\intOff, \varOff, \freq, \amp]);
 		Post << "CHECK cv height " << cvH << " fits in " << scrollHeight << "px: FAIL\n";
 	});
 
-	if(psH <= 175, {
-		Post << "CHECK paramSection " << psH << " <= 175px cap: PASS\n";
+	if(psH <= 75, {
+		Post << "CHECK paramSection " << psH << " <= 75px cap: PASS\n";
 	}, {
-		Post << "CHECK paramSection " << psH << " <= 175px cap: FAIL\n";
+		Post << "CHECK paramSection " << psH << " <= 75px cap: FAIL\n";
 	});
 
 	if(ps.isKindOf(ScrollView), {
@@ -117,7 +118,7 @@ gui.excludeParams_([\intOff, \varOff, \freq, \amp]);
 		if(canvasH > viewportH, {
 			Post << "CHECK inner scroll active (canvas > viewport): PASS\n";
 		}, {
-			Post << "CHECK inner scroll active (canvas > viewport): FAIL — all params visible, no scroll needed\n";
+			Post << "CHECK inner scroll active (canvas > viewport): FAIL -- all params visible, no scroll needed\n";
 		});
 	});
 }.defer(0.4);
