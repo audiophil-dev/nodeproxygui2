@@ -17,6 +17,7 @@ NodeProxyGui2 {
 	var updateInfoFunc;
 
 	var font, headerFont, headerHeight;
+	var <paramSectionMaxHeight;
 
 	var nodeProxyChangedFunc, specChangedFunc;
 
@@ -54,6 +55,7 @@ NodeProxyGui2 {
 
 		contentView.children.do{ | c | c.font = if(c == header, headerFont, font) };
 		headerHeight = contentView.sizeHint.height;
+		paramSectionMaxHeight = (Window.availableBounds.height * 0.5).asInteger;
 
 		this.setUpDependencies(limitUpdateRate.max(0));
 
@@ -65,6 +67,15 @@ NodeProxyGui2 {
 	}
 
 	asView { ^contentView }
+
+	// Override the maximum height of the parameter scroll area.
+	// Call this before excludeParams_ when embedding NPG2 inside a
+	// height-constrained host layout (e.g. a fixed-height ScrollView).
+	// The change takes effect on the next makeParameterSection call.
+	paramSectionMaxHeight_ { | height |
+		paramSectionMaxHeight = height.asInteger;
+		{ this.makeParameterSection }.defer;
+	}
 
 	setUpDependencies { | limitUpdateRate |
 		var limitOrder, limitDict, limitScheduler;
@@ -376,9 +387,9 @@ NodeProxyGui2 {
 		// the canvas collapses to zero and the scrollbar never appears.
 		innerH = innerView.sizeHint.height;
 		innerView.fixedHeight_(innerH);
-		if(innerH > (Window.availableBounds.height * 0.5), {
+		if(innerH > paramSectionMaxHeight, {
 			parameterSection = ScrollView.new().canvas_(innerView);
-			parameterSection.maxHeight_((Window.availableBounds.height * 0.5).asInteger);
+			parameterSection.maxHeight_(paramSectionMaxHeight);
 			contentView.layout.add(parameterSection, 1);
 		}, {
 			parameterSection = innerView;
@@ -392,7 +403,7 @@ NodeProxyGui2 {
 		// headerHeight was captured before makeParameterSection (safe).
 		// innerH derives from innerView.sizeHint before any canvas_ reparenting.
 		windowTargetH = if(parameterSection.isKindOf(ScrollView), {
-			headerHeight + (Window.availableBounds.height * 0.5).asInteger
+			headerHeight + paramSectionMaxHeight
 		}, {
 			headerHeight + innerH + 4
 		});
