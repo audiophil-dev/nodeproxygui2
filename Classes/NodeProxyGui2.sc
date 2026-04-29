@@ -18,6 +18,7 @@ NodeProxyGui2 {
 
 	var font, headerFont, headerHeight;
 	var <paramSectionMaxHeight;
+	var embedded;
 
 	var nodeProxyChangedFunc, specChangedFunc;
 
@@ -27,6 +28,8 @@ NodeProxyGui2 {
 	}
 
 	init { | limitUpdateRate, show, showInfo, showTransport |
+
+		embedded = false;
 
 		this.initFonts();
 
@@ -75,6 +78,14 @@ NodeProxyGui2 {
 	paramSectionMaxHeight_ { | height |
 		paramSectionMaxHeight = height.asInteger;
 		{ this.makeParameterSection }.defer;
+	}
+
+	// When true, the host layout (e.g. firstRow HLayout in KSEG) controls
+	// contentView's height. fixedHeight_ / maxHeight_ on contentView are
+	// suppressed so the view can expand to fill available space.
+	// Call before gui2 returns or immediately after.
+	embedded_ { | bool |
+		embedded = bool;
 	}
 
 	setUpDependencies { | limitUpdateRate |
@@ -407,8 +418,14 @@ NodeProxyGui2 {
 		}, {
 			headerHeight + innerH + 4
 		});
-		contentView.fixedHeight_(windowTargetH);
-		contentView.maxHeight_(windowTargetH);
+		// In standalone mode, pin contentView to exactly the content height so the
+		// window does not show empty space. In embedded mode, the host layout
+		// (e.g. firstRow HLayout in KSEG) controls contentView's height; applying
+		// fixedHeight_ would prevent it from expanding to fill available space.
+		if(embedded.not, {
+			contentView.fixedHeight_(windowTargetH);
+			contentView.maxHeight_(windowTargetH);
+		});
 		// Resize the window to match when running standalone (not embedded).
 		// When embedded, contentView will be reparented by the host layout;
 		// resizing the (hidden) window is harmless in that case.
@@ -418,10 +435,12 @@ NodeProxyGui2 {
 		);
 		// Re-apply after Qt's layout pass to counter any deferred geometry
 		// updates that might loosen the constraints.
-		{
-			contentView.fixedHeight_(windowTargetH);
-			contentView.maxHeight_(windowTargetH);
-		}.defer(0.07);
+		if(embedded.not, {
+			{
+				contentView.fixedHeight_(windowTargetH);
+				contentView.maxHeight_(windowTargetH);
+			}.defer(0.07);
+		});
 	}
 
 	makeParameterViews {
