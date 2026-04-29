@@ -415,6 +415,13 @@ NodeProxyGui2 {
 		});
 		contentView.fixedHeight_(windowTargetH);
 		contentView.maxHeight_(windowTargetH);
+		// Resize the window to match when running standalone (not embedded).
+		// When embedded, contentView will be reparented by the host layout;
+		// resizing the (hidden) window is harmless in that case.
+		window.view.bounds = window.view.bounds.resizeTo(
+			window.view.bounds.width,
+			windowTargetH.min(Window.availableBounds.height)
+		);
 		{
 			innerView.fixedHeight_(innerH);
 			contentView.fixedHeight_(windowTargetH);
