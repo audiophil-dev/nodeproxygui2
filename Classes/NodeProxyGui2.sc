@@ -13,7 +13,7 @@ NodeProxyGui2 {
 
 	var play, volslider, volvalueBox;
 	var header, <parameterSection;
-	var contentView;
+	var <contentView;
 	var updateInfoFunc;
 
 	var font, headerFont, headerHeight;
@@ -397,14 +397,19 @@ NodeProxyGui2 {
 		// created, zero-sized ScrollView. Without fixedHeight_ in place first,
 		// the canvas collapses to zero and the scrollbar never appears.
 		innerH = innerView.sizeHint.height;
-		innerView.fixedHeight_(innerH);
 		if(innerH > paramSectionMaxHeight, {
+			// Pin innerView BEFORE canvas_ so the canvas does not collapse to
+			// the viewport size of the freshly created zero-sized ScrollView.
+			innerView.fixedHeight_(innerH);
 			parameterSection = ScrollView.new().canvas_(innerView);
 			parameterSection.maxHeight_(paramSectionMaxHeight);
 			contentView.layout.add(parameterSection, 1);
 		}, {
+			// In embedded mode do NOT pin innerView so it can stretch to fill
+			// the available height granted by the parent layout (stretch=1).
+			if(embedded.not, { innerView.fixedHeight_(innerH) });
 			parameterSection = innerView;
-			contentView.layout.add(parameterSection, 0);
+			contentView.layout.add(parameterSection, if(embedded, { 1 }, { 0 }));
 		});
 		// Compute target height from known-reliable parts rather than
 		// contentView.sizeHint.height. When multiple NodeProxyGui2 windows are
