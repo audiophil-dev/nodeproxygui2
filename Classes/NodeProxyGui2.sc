@@ -13,6 +13,7 @@ NodeProxyGui2 {
 
 	var play, volslider, volvalueBox;
 	var header, parameterSection;
+	var contentView;
 	var updateInfoFunc;
 
 	var font, headerFont, headerHeight;
@@ -32,25 +33,27 @@ NodeProxyGui2 {
 		paramViews = IdentityDictionary.new();
 
 		window = Window.new(nodeProxy.key);
-		window.layout = VLayout.new(
+		contentView = View.new();
+		contentView.layout = VLayout.new(
 			// parameterSection gets added here in makeParameterSection
 		);
+		window.layout = VLayout(contentView);
 
 		if (showInfo) {
-			window.layout.add(this.makeInfoSection())
+			contentView.layout.add(this.makeInfoSection())
 		} {
 			if (nodeProxy.key.notNil) {
 				header = StaticText.new().string_(nodeProxy.key);
-				window.layout.add(header);
+				contentView.layout.add(header);
 			}
 		};
 
 		if (showTransport) {
-			window.layout.add(this.makeTransportSection())
+			contentView.layout.add(this.makeTransportSection())
 		};
 
-		window.view.children.do{ | c | c.font = if(c == header, headerFont, font) };
-		headerHeight = window.view.sizeHint.height;
+		contentView.children.do{ | c | c.font = if(c == header, headerFont, font) };
+		headerHeight = contentView.sizeHint.height;
 
 		this.setUpDependencies(limitUpdateRate.max(0));
 
@@ -61,7 +64,7 @@ NodeProxyGui2 {
 		}
 	}
 
-	asView { ^window.asView }
+	asView { ^contentView }
 
 	setUpDependencies { | limitUpdateRate |
 		var limitOrder, limitDict, limitScheduler;
@@ -327,7 +330,7 @@ NodeProxyGui2 {
 	makeParameterSection {
 		var excluded = defaultExcludeParams ++ prExcludeParams;
 		var numParams = params.flatSize;
-		var innerView;
+		var innerView, innerH, windowTargetH;
 
 		params.do{ | spec | spec.removeDependant(specChangedFunc) };
 		params.clear;
@@ -372,16 +375,37 @@ NodeProxyGui2 {
 		if(innerView.sizeHint.height > (Window.availableBounds.height * 0.5), {
 			parameterSection = ScrollView.new().canvas_(innerView);
 			parameterSection.maxHeight_((Window.availableBounds.height * 0.5).asInteger);
-			window.layout.add(parameterSection, 1);
+			contentView.layout.add(parameterSection, 1);
 		}, {
 			parameterSection = innerView;
-			window.layout.add(parameterSection, 0);
+			contentView.layout.add(parameterSection, 0);
 		});
+		// Compute target height from known-reliable parts rather than
+		// contentView.sizeHint.height. When multiple NodeProxyGui2 windows are
+		// created in sequence, Qt's layout engine contaminates subsequent
+		// sizeHint queries with previously fixed window heights, causing
+		// accumulated values (150, 262, 374 px, ...) instead of ~130 px.
+		// headerHeight was captured before makeParameterSection (safe).
+		// innerView.sizeHint is not affected by the contamination.
+		innerH = innerView.sizeHint.height;
+		windowTargetH = if(parameterSection.isKindOf(ScrollView), {
+			headerHeight + (Window.availableBounds.height * 0.5).asInteger
+		}, {
+			headerHeight + innerH + 4
+		});
+		contentView.fixedHeight_(windowTargetH);
+		contentView.maxHeight_(windowTargetH);
+		// Resize the window to match when running standalone (not embedded).
+		// When embedded, contentView will be reparented by the host layout;
+		// resizing the (hidden) window is harmless in that case.
+		window.view.bounds = window.view.bounds.resizeTo(
+			window.view.bounds.width,
+			windowTargetH.min(Window.availableBounds.height)
+		);
 		{
-			innerView.fixedHeight_(innerView.sizeHint.height);
-			if(parameterSection.isKindOf(ScrollView).not, {
-				window.view.fixedHeight_(window.view.sizeHint.height)
-			})
+			innerView.fixedHeight_(innerH);
+			contentView.fixedHeight_(windowTargetH);
+			contentView.maxHeight_(windowTargetH);
 		}.defer(0.07);
 	}
 
