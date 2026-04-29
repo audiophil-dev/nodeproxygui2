@@ -4,7 +4,7 @@
 //
 // Replicates the exact SE call sequence:
 //   gui2(0, false, false, false, false)
-//   paramSectionMaxHeight_(177)          -- fix: cap param scroll area
+//   paramSectionMaxHeight_(175)          -- fix: cap param scroll area
 //   embed in SE layout structure
 //   excludeParams_([...])               -- triggers deferred makeParameterSection rebuild
 //   wait and report
@@ -14,7 +14,9 @@
 // With the fix: cv height ≤ 300px, parameterSection scrollbar fully visible.
 //
 // Measured NPG2 layout overhead (header rows + VLayout spacing) = 123px.
-// Max paramSection height = 300 - 123 = 177px.
+// Max paramSection height = 300 - 123 = 177px (NPG2-only overhead).
+// Full KSEG overhead (NPG2 + secondRow + thirdRow + VLayout) = 125px.
+// Max paramSection height = 300 - 125 = 175px.
 //
 // Run in SC IDE with Cmd+Enter.
 (
@@ -63,7 +65,7 @@ gui = Ndef(proxyName).gui2(0, false, false, false, false);
 // --- Step 2: apply fix before embedding ---
 // NPG2 layout overhead (header rows + VLayout spacing) = 123px empirically.
 // 300px (outer scroll) - 123px (overhead) = 177px max for parameterSection.
-gui.paramSectionMaxHeight_(177);
+gui.paramSectionMaxHeight_(175);
 
 // --- Step 3: embed ---
 innerLayout.add(gui);
@@ -102,10 +104,10 @@ gui.excludeParams_([\intOff, \varOff, \freq, \amp]);
 		Post << "CHECK cv height " << cvH << " fits in " << scrollHeight << "px: FAIL\n";
 	});
 
-	if(psH <= 177, {
-		Post << "CHECK paramSection " << psH << " <= 177px cap: PASS\n";
+	if(psH <= 175, {
+		Post << "CHECK paramSection " << psH << " <= 175px cap: PASS\n";
 	}, {
-		Post << "CHECK paramSection " << psH << " <= 177px cap: FAIL\n";
+		Post << "CHECK paramSection " << psH << " <= 175px cap: FAIL\n";
 	});
 
 	if(ps.isKindOf(ScrollView), {
