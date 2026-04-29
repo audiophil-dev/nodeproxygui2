@@ -369,10 +369,14 @@ NodeProxyGui2 {
 
 		if(parameterSection.notNil, { parameterSection.remove });
 		innerView = this.makeParameterViews().resizeToHint;
-		// Pin height to sizeHint so sliders cannot grow when the parent layout
-		// distributes surplus vertical space. When the natural height exceeds
-		// half the screen, a ScrollView provides the necessary overflow container.
-		if(innerView.sizeHint.height > (Window.availableBounds.height * 0.5), {
+		// Capture the true content height and pin innerView BEFORE calling
+		// canvas_. ScrollView.canvas_ calls invokeMethod(\setWidget, view, true),
+		// which resizes the canvas widget to the viewport size of the freshly
+		// created, zero-sized ScrollView. Without fixedHeight_ in place first,
+		// the canvas collapses to zero and the scrollbar never appears.
+		innerH = innerView.sizeHint.height;
+		innerView.fixedHeight_(innerH);
+		if(innerH > (Window.availableBounds.height * 0.5), {
 			parameterSection = ScrollView.new().canvas_(innerView);
 			parameterSection.maxHeight_((Window.availableBounds.height * 0.5).asInteger);
 			contentView.layout.add(parameterSection, 1);
@@ -386,8 +390,7 @@ NodeProxyGui2 {
 		// sizeHint queries with previously fixed window heights, causing
 		// accumulated values (150, 262, 374 px, ...) instead of ~130 px.
 		// headerHeight was captured before makeParameterSection (safe).
-		// innerView.sizeHint is not affected by the contamination.
-		innerH = innerView.sizeHint.height;
+		// innerH derives from innerView.sizeHint before any canvas_ reparenting.
 		windowTargetH = if(parameterSection.isKindOf(ScrollView), {
 			headerHeight + (Window.availableBounds.height * 0.5).asInteger
 		}, {
@@ -402,8 +405,9 @@ NodeProxyGui2 {
 			window.view.bounds.width,
 			windowTargetH.min(Window.availableBounds.height)
 		);
+		// Re-apply after Qt's layout pass to counter any deferred geometry
+		// updates that might loosen the constraints.
 		{
-			innerView.fixedHeight_(innerH);
 			contentView.fixedHeight_(windowTargetH);
 			contentView.maxHeight_(windowTargetH);
 		}.defer(0.07);
