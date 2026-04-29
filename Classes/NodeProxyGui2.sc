@@ -265,53 +265,26 @@ NodeProxyGui2 {
 	}
 
 	makeTransportSection {
-		var clear, send, scope, free, popup;
+		var minW = 55;
+		var proxyButtons, popup;
 
 		play = Button.new()
 		.states_([
 			["play"],
 			["stop", Color.black, Color.grey(0.5, 0.5)],
 		])
-		.action_({ | obj |
-			if(obj.value == 1, {
-				nodeProxy.play
-			}, {
-				nodeProxy.stop
-			})
+		.action_({ |obj|
+			if(obj.value == 1, { nodeProxy.play }, { nodeProxy.stop })
 		})
-		.value_(nodeProxy.isMonitoring.binaryValue);
+		.value_(nodeProxy.isMonitoring.binaryValue)
+		.minWidth_(minW);
 
-		clear = Button.new()
-		.states_(#[
-			["clear"]
-		])
-		.action_({ | obj |
-			nodeProxy.clear
-		});
-
-		send = Button.new()
-		.states_(#[
-			["send"]
-		])
-		.action_({ | obj |
-			nodeProxy.send
-		});
-
-		scope = Button.new()
-		.states_(#[
-			["scope"]
-		])
-		.action_({ | obj |
-			nodeProxy.scope
-		});
-
-		free = Button.new()
-		.states_(#[
-			["free"]
-		])
-		.action_({ | obj |
-			nodeProxy.free
-		});
+		proxyButtons = #[\clear, \free, \scope, \send].collect { |sym|
+			Button.new()
+			.states_([[sym.asString]])
+			.action_({ nodeProxy.perform(sym) })
+			.minWidth_(minW)
+		};
 
 		popup = PopUpMenu.new()
 		.allowsReselection_(true)
@@ -322,7 +295,7 @@ NodeProxyGui2 {
 			"document",
 			"post",
 		])
-		.action_({ | obj |
+		.action_({ |obj|
 			switch(obj.value,
 				0, { this.defaults() },
 				1, { this.randomize() },
@@ -331,17 +304,13 @@ NodeProxyGui2 {
 				4, { this.asCode.postln },
 			)
 		})
-		.keyDownAction_({ | obj, char |
-			if(char == Char.ret, {
-				obj.doAction
-			})
+		.keyDownAction_({ |obj, char|
+			if(char == Char.ret, { obj.doAction })
 		})
 		.canFocus_(true)
 		.fixedWidth_(25);
 
-		^HLayout.new(
-			play, clear, free, scope, send, popup
-		)
+		^HLayout.new(*([play] ++ proxyButtons ++ [popup]))
 	}
 
 	makeParameterSection {
