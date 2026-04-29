@@ -20,11 +20,11 @@ NodeProxyGui2 {
 	var nodeProxyChangedFunc, specChangedFunc;
 
 	// this is a normal constructor method
-	*new { | nodeproxy, limitUpdateRate = 0, show = true, collapseArrays = false |
-		^super.newCopyArgs(nodeproxy, collapseArrays).init(limitUpdateRate, show)
+	*new { | nodeproxy, limitUpdateRate = 0, show = true, collapseArrays = false, showInfo = true, showTransport = true |
+		^super.newCopyArgs(nodeproxy, collapseArrays).init(limitUpdateRate, show, showInfo, showTransport)
 	}
 
-	init { | limitUpdateRate, show |
+	init { | limitUpdateRate, show, showInfo, showTransport |
 
 		this.initFonts();
 
@@ -33,10 +33,21 @@ NodeProxyGui2 {
 
 		window = Window.new(nodeProxy.key);
 		window.layout = VLayout.new(
-			this.makeInfoSection(),
-			this.makeTransportSection(),
 			// parameterSection gets added here in makeParameterSection
 		);
+
+		if (showInfo) {
+			window.layout.add(this.makeInfoSection())
+		} {
+			if (nodeProxy.key.notNil) {
+				header = StaticText.new().string_(nodeProxy.key);
+				window.layout.add(header);
+			}
+		};
+
+		if (showTransport) {
+			window.layout.add(this.makeTransportSection())
+		};
 
 		window.view.children.do{ | c | c.font = if(c == header, headerFont, font) };
 		headerHeight = window.view.sizeHint.height;
@@ -265,53 +276,26 @@ NodeProxyGui2 {
 	}
 
 	makeTransportSection {
-		var clear, send, scope, free, popup;
+		var minW = 55;
+		var proxyButtons, popup;
 
 		play = Button.new()
 		.states_([
 			["play"],
 			["stop", Color.black, Color.grey(0.5, 0.5)],
 		])
-		.action_({ | obj |
-			if(obj.value == 1, {
-				nodeProxy.play
-			}, {
-				nodeProxy.stop
-			})
+		.action_({ |obj|
+			if(obj.value == 1, { nodeProxy.play }, { nodeProxy.stop })
 		})
-		.value_(nodeProxy.isMonitoring.binaryValue);
+		.value_(nodeProxy.isMonitoring.binaryValue)
+		.minWidth_(minW);
 
-		clear = Button.new()
-		.states_(#[
-			["clear"]
-		])
-		.action_({ | obj |
-			nodeProxy.clear
-		});
-
-		send = Button.new()
-		.states_(#[
-			["send"]
-		])
-		.action_({ | obj |
-			nodeProxy.send
-		});
-
-		scope = Button.new()
-		.states_(#[
-			["scope"]
-		])
-		.action_({ | obj |
-			nodeProxy.scope
-		});
-
-		free = Button.new()
-		.states_(#[
-			["free"]
-		])
-		.action_({ | obj |
-			nodeProxy.free
-		});
+		proxyButtons = #[\clear, \free, \scope, \send].collect { |sym|
+			Button.new()
+			.states_([[sym.asString]])
+			.action_({ nodeProxy.perform(sym) })
+			.minWidth_(minW)
+		};
 
 		popup = PopUpMenu.new()
 		.allowsReselection_(true)
@@ -322,7 +306,7 @@ NodeProxyGui2 {
 			"document",
 			"post",
 		])
-		.action_({ | obj |
+		.action_({ |obj|
 			switch(obj.value,
 				0, { this.defaults() },
 				1, { this.randomize() },
@@ -331,23 +315,19 @@ NodeProxyGui2 {
 				4, { this.asCode.postln },
 			)
 		})
-		.keyDownAction_({ | obj, char |
-			if(char == Char.ret, {
-				obj.doAction
-			})
+		.keyDownAction_({ |obj, char|
+			if(char == Char.ret, { obj.doAction })
 		})
 		.canFocus_(true)
 		.fixedWidth_(25);
 
-		^HLayout.new(
-			play, clear, free, scope, send, popup
-		)
+		^HLayout.new(*([play] ++ proxyButtons ++ [popup]))
 	}
 
 	makeParameterSection {
 		var excluded = defaultExcludeParams ++ prExcludeParams;
 		var numParams = params.flatSize;
-		var sectionSize;
+		var innerView;
 
 		params.do{ | spec | spec.removeDependant(specChangedFunc) };
 		params.clear;
@@ -359,10 +339,10 @@ NodeProxyGui2 {
 
 				spec = case
 				{ val.isNumber } {
-					(nodeProxy.specs.at(key) ?? { Spec.specs.at(key) }).asSpec
+					(nodeProxy.specs.at(key) ?? { Spec.specs.at(key) } ?? { nodeProxy.respondsTo(\getSpec).if { nodeProxy.getSpec(key) } }).asSpec
 				}
 				{ val.isArray } {
-					(nodeProxy.specs.at(key) ?? { Spec.specs.at(key) }).asSpec.dup(val.size)
+					(nodeProxy.specs.at(key) ?? { Spec.specs.at(key) } ?? { nodeProxy.respondsTo(\getSpec).if { nodeProxy.getSpec(key) } }).asSpec.dup(val.size)
 				}
 				{ val.isKindOf(Bus) } {
 					if(val.rate == \control, { \controlbus }, { \audiobus }).asSpec
@@ -385,18 +365,24 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
-		parameterSection = this.makeParameterViews();
-		sectionSize = parameterSection.sizeHint;
-		parameterSection = ScrollView.new().canvas_(parameterSection);
-		window.layout.add(parameterSection, 1);
-
-		if(window.view.parent.isNil, {  //resize only when not embedded
-			window.view.bounds = window.view.bounds.resizeTo(
-				window.view.bounds.width,
-				(sectionSize.height + headerHeight + 30)  //30 compensate default spacing
-				.min(Window.availableBounds.height)
-			);
+		innerView = this.makeParameterViews().resizeToHint;
+		// Pin height to sizeHint so sliders cannot grow when the parent layout
+		// distributes surplus vertical space. When the natural height exceeds
+		// half the screen, a ScrollView provides the necessary overflow container.
+		if(innerView.sizeHint.height > (Window.availableBounds.height * 0.5), {
+			parameterSection = ScrollView.new().canvas_(innerView);
+			parameterSection.maxHeight_((Window.availableBounds.height * 0.5).asInteger);
+			window.layout.add(parameterSection, 1);
+		}, {
+			parameterSection = innerView;
+			window.layout.add(parameterSection, 0);
 		});
+		{
+			innerView.fixedHeight_(innerView.sizeHint.height);
+			if(parameterSection.isKindOf(ScrollView).not, {
+				window.view.fixedHeight_(window.view.sizeHint.height)
+			})
+		}.defer(0.07);
 	}
 
 	makeParameterViews {
@@ -434,7 +420,9 @@ NodeProxyGui2 {
 		});
 
 		paramViews.clear;
-		params.sortedKeysValuesDo{ | key, spec |
+		nodeProxy.getKeysValues.select{ | kv | params.includesKey(kv[0]) }.do{ | keyVal |
+			var key = keyVal[0];
+			var spec = params[key];
 			var layout, paramVal;
 			var slider, valueBox, textField, staticText;
 			var sliders, valueBoxes;
@@ -674,7 +662,7 @@ NodeProxyGui2 {
 			var spec;
 
 			if(this.paramPresentInArray(key, ignored).not, {
-				spec = (nodeProxy.specs.at(key) ?? { Spec.specs.at(key) }).asSpec;
+				spec = (nodeProxy.specs.at(key) ?? { Spec.specs.at(key) } ?? { nodeProxy.respondsTo(\getSpec).if { nodeProxy.getSpec(key) } }).asSpec;
 				if(val.isNumber, {
 					accepted.put(key, spec)
 				}, {
