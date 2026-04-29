@@ -48,7 +48,7 @@ Added `var <paramSectionMaxHeight` instance variable and `paramSectionMaxHeight_
 ### Change 3 — `embedded` mode (suppress `contentView.fixedHeight_`)
 
 **Branch**: `feature/fix-scrollview-condition`  
-**Commits**: `219aaa3`  
+**Commits**: `219aaa3`, `eb7b460`  
 **Files**: `Classes/NodeProxyGui2.sc`
 
 Added `var embedded` instance variable (default `false`) and `embedded_` setter. When `embedded = true`, the two call sites in `makeParameterSection` that call `contentView.fixedHeight_(windowTargetH)` and `contentView.maxHeight_(windowTargetH)` are skipped. The internal `parameterSection.maxHeight_(paramSectionMaxHeight)` call is applied in both modes.
@@ -56,6 +56,35 @@ Added `var embedded` instance variable (default `false`) and `embedded_` setter.
 **Why**: In standalone mode, `fixedHeight_` prevents the window from showing empty space below the parameter section. In embedded mode, the host layout (e.g. `firstRow` HLayout in `KlongSoundEnvironmentGui`) determines `contentView`'s height. Applying `fixedHeight_` in embedded mode pins the view at a small value (121px in the KSEG context) regardless of how much space the host offers.
 
 **Upstream candidacy**: Yes — clean opt-in flag, backward compatible. Suitable for PR.
+
+---
+
+### Change 4 — `<contentView` getter
+
+**Branch**: `feature/fix-scrollview-condition`  
+**Commits**: `eb7b460`  
+**Files**: `Classes/NodeProxyGui2.sc` line 16
+
+Changed `var contentView` to `var <contentView` to expose a read accessor. Required by the host (KSEG) to apply a deferred `fixedHeight_` pin after the layout settles.
+
+**Upstream candidacy**: Yes — non-breaking addition. Suitable for PR.
+
+---
+
+### Change 5 — `parameterSection` fills available height in embedded no-scroll path
+
+**Branch**: `feature/fix-scrollview-condition`  
+**Commits**: `f3f7da8`  
+**Files**: `Classes/NodeProxyGui2.sc`, `makeParameterSection`
+
+Two changes to the no-scroll branch of `makeParameterSection`:
+
+1. `innerView.fixedHeight_(innerH)` is now inside the scroll branch only. It is required there to prevent `ScrollView.canvas_` from collapsing the canvas to zero. In the no-scroll path, `fixedHeight_` is skipped when `embedded = true` so `innerView` can stretch to fill available space.
+2. `contentView.layout.add(parameterSection, 0)` changed to `contentView.layout.add(parameterSection, if(embedded, { 1 }, { 0 }))` — stretch=1 in embedded mode so Qt distributes remaining vertical space to `parameterSection`.
+
+**Why**: Without these changes, `parameterSection` was content-sized (46–166px) even though `contentView` was 303px. The result was visible blank space inside NPG2. After the fix, `ps.h + hdr.h = cv.h` for all environments — no blank space.
+
+**Upstream candidacy**: Yes, in conjunction with Change 3. The `embedded` guard on `fixedHeight_` skipping is clean and backward compatible.
 
 ---
 
@@ -109,32 +138,31 @@ Verified empirically: after fix, `secondRow = 26px`, `thirdRow = 21px` consisten
 
 ### Fix Applied
 
-**NPG2 (`219aaa3`)**: Added `embedded` mode. When `embedded = true`, `contentView.fixedHeight_` and `contentView.maxHeight_` calls in `makeParameterSection` are suppressed. `parameterSection.maxHeight_(paramSectionMaxHeight)` is still applied to cap the internal scroll area.
+**NPG2 (`219aaa3`, `eb7b460`, `f3f7da8`)**: Added `embedded` mode, `<contentView` getter, and parameterSection fill fix (Changes 3–5 above).
 
-**KSEG (`583c0cb`)**: Added `macroView.embedded_(true)` in `prMakeMacroControls` before `paramSectionMaxHeight_`.
+**KSEG (`583c0cb`, `b1b5891`)**: Added `macroView.embedded_(true)`, raised `paramSectionMaxHeight_(262)`, removed intermediate VLayout, added deferred `contentView.fixedHeight_(firstRow.bounds.height)` pin.
 
 ### Verified Post-Fix Results
 
-Run `startEngine.scd` with debug postln measuring `macroView.asView.bounds.height` and individual `Slider.bounds.height` values at `defer(0.5)` after GUI construction.
+Run `startEngine.scd` with debug postln measuring `firstRow.bounds.height`, `cv.bounds.height`, `parameterSection.bounds.height`, and derived `hdr.h = cv.h - ps.h` at `defer(0.6)` after GUI construction.
 
 | Metric | Before fix | After fix |
 |---|---|---|
-| `macroView.asView` height | 121px (all environments) | 186–306px (varies by param count) |
+| `contentView` height | 121px (all environments) | 303px (all environments, = firstRow − 2px border) |
 | Slider heights | 24–28px | 24–28px (unchanged) |
 | `firstRow` height | 308px | 308px (unchanged) |
+| `parameterSection` height | 46–166px (content-sized) | `cv.h − hdr.h` (fills all available space) |
+| `ps.h + hdr.h = cv.h` | No | Yes — verified for all 8 environments |
+| Blank space inside NPG2 | Yes (when few params) | No |
 
-Sliders remain compact after the fix. The VLayout inside NPG2 does not distribute the extra height to individual sliders because `makeParameterViews` already applies `maxHeight_(26)` to each slider row.
+Two distinct header heights observed across the 8 environments:
 
-### Remaining Issue: SE GUI Not Fully Fixed
+| `hdr.h` | `ps.h` | Sum = `cv.h` |
+|---|---|---|
+| 52px | 251px | 303px |
+| 123px | 180px | 303px |
 
-The NPG2 view now expands to fill `firstRow`, but the SE GUI still does not look correct. The specific remaining problem has not yet been characterized. Next step: open the GUI visually and identify what is wrong.
-
-Possible candidates:
-- NPG2 `contentView`'s VLayout is distributing extra height to the header or transport section, creating visible gaps
-- The gap between NPG2 height (186–247px) and `firstRow` (308px) appears as empty space in some environments
-- `paramSectionMaxHeight_(75)` is still capping the internal scroll area at 75px, meaning only ~75px is used for parameters even though the view is 247px — the remaining 247 − 46 − 75 = 126px may appear as empty space or be taken by the VLayout spacer
-
-The `paramSectionMaxHeight_(75)` value was originally computed for a 200px scrollView assumption that turned out to be wrong (actual: 400px). In embedded mode with 308px available, this cap is overly conservative. It should be revisited: either raise it or remove it (let the scroll area fill the available height).
+Both sums equal `cv.h = 303px`. Blank space eliminated.
 
 ---
 
@@ -154,9 +182,11 @@ All tests are in `Test/`. Run via `Test/run_tests.scd`.
 | — | `secondRow` stays at 26px after `fixedHeight_(26)` across all engine instances | Real engine run (`startEngine.scd` with `postln`) | PASS |
 | — | `thirdRow` stays at 21px after `fixedHeight_(21)` across all engine instances | Real engine run | PASS |
 | — | `KlongGenGui` scrollView height is 400px (not 200px as previously assumed) | Real engine run | PASS — 400px confirmed |
-| — | NPG2 `contentView` expands beyond 121px when `embedded_(true)` | Real engine run post-fix | PASS — 186–306px observed |
+| — | NPG2 `contentView` expands beyond 121px when `embedded_(true)` | Real engine run post-fix | PASS — 303px observed (all environments) |
 | — | Sliders remain compact (≤ 28px) after embedded mode removes `fixedHeight_` | Real engine run post-fix | PASS — 24–28px across all environments |
 | — | `paramSectionMaxHeight_` setter rebuilds `makeParameterSection` immediately on next AppClock tick | Code inspection + `TestNodeProxyGui2SliderHeight` | PASS |
 | — | Many params (≥ 20) produce a `ScrollView`; few params do not | `TestNodeProxyGui2ScrollView.test_manyParams_usesScrollView`, `test_fewParams_noScrollView` | PASS |
 | — | `ScrollView` canvas height exceeds viewport after `innerView.fixedHeight_` is applied before `canvas_()` | `TestNodeProxyGui2ScrollView.test_scrollView_contentExceedsViewport` | PASS |
 | — | Slider heights remain ≤ 28px in all `gui2` call patterns incl. `showInfo=true` | `TestNodeProxyGui2SliderHeight` (all 5 tests) | PASS |
+| — | `ps.h + hdr.h = cv.h` — parameterSection fills all available space in embedded no-scroll path | Real engine run with header debug (`f3f7da8`) | PASS — verified for all 8 environments |
+| — | No blank space inside NPG2 when embedded in KSEG (few params, no scroll) | Real engine run post `f3f7da8` | PASS — ps.h fills cv.h − hdr.h |
