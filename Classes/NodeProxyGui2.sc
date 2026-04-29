@@ -13,6 +13,7 @@ NodeProxyGui2 {
 
 	var play, volslider, volvalueBox;
 	var header, parameterSection;
+	var contentView;
 	var updateInfoFunc;
 
 	var font, headerFont, headerHeight;
@@ -32,14 +33,16 @@ NodeProxyGui2 {
 		paramViews = IdentityDictionary.new();
 
 		window = Window.new(nodeProxy.key);
-		window.layout = VLayout.new(
+		contentView = View.new();
+		contentView.layout = VLayout.new(
 			this.makeInfoSection(),
 			this.makeTransportSection(),
 			// parameterSection gets added here in makeParameterSection
 		);
+		window.layout = VLayout(contentView);
 
-		window.view.children.do{ | c | c.font = if(c == header, headerFont, font) };
-		headerHeight = window.view.sizeHint.height;
+		contentView.children.do{ | c | c.font = if(c == header, headerFont, font) };
+		headerHeight = contentView.sizeHint.height;
 
 		this.setUpDependencies(limitUpdateRate.max(0));
 
@@ -50,7 +53,7 @@ NodeProxyGui2 {
 		}
 	}
 
-	asView { ^window.asView }
+	asView { ^contentView }
 
 	setUpDependencies { | limitUpdateRate |
 		var limitOrder, limitDict, limitScheduler;
@@ -141,7 +144,7 @@ NodeProxyGui2 {
 			});
 		}
 		{ what == \play or: { what == \playN } } {
-			play.value_(1);
+			play !? { play.value_(1) };
 			if(nodeProxy.monitor.notNil and: { volslider.isNil }, {
 				this.makeParameterSection()
 			});
@@ -163,10 +166,10 @@ NodeProxyGui2 {
 			updateInfoFunc.value(nodeProxy)
 		}
 		{ what == \stop or: { what == \pause } } {
-			play.value_(0)
+			play !? { play.value_(0) }
 		}
 		{ what == \resume } {
-			play.value_(1)
+			play !? { play.value_(1) }
 		}
 		{ what == \unmap } {
 			nodeProxy.getKeysValues(args).do{ | arr |
@@ -347,7 +350,7 @@ NodeProxyGui2 {
 	makeParameterSection {
 		var excluded = defaultExcludeParams ++ prExcludeParams;
 		var numParams = params.flatSize;
-		var sectionSize;
+		var innerView, innerH, windowTargetH;
 
 		params.do{ | spec | spec.removeDependant(specChangedFunc) };
 		params.clear;
@@ -385,18 +388,38 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
-		parameterSection = this.makeParameterViews();
-		sectionSize = parameterSection.sizeHint;
-		parameterSection = ScrollView.new().canvas_(parameterSection);
-		window.layout.add(parameterSection, 1);
-
-		if(window.view.parent.isNil, {  //resize only when not embedded
-			window.view.bounds = window.view.bounds.resizeTo(
-				window.view.bounds.width,
-				(sectionSize.height + headerHeight + 30)  //30 compensate default spacing
-				.min(Window.availableBounds.height)
-			);
+		innerView = this.makeParameterViews();
+		// Conditionally wrap in ScrollView for large parameter sets.
+		// When the natural height exceeds half the screen, provide a capped
+		// ScrollView so the GUI stays usable.
+		if(innerView.sizeHint.height > (Window.availableBounds.height * 0.5), {
+			parameterSection = ScrollView.new().canvas_(innerView);
+			parameterSection.maxHeight_((Window.availableBounds.height * 0.5).asInteger);
+			contentView.layout.add(parameterSection, 1);
+		}, {
+			parameterSection = innerView;
+			contentView.layout.add(parameterSection, 0);
 		});
+		// Compute target height from known-reliable parts rather than
+		// contentView.sizeHint.height. When multiple NodeProxyGui2 windows are
+		// created in sequence, Qt's layout engine contaminates subsequent
+		// sizeHint queries with previously fixed window heights, causing
+		// accumulated values (150, 262, 374 px, ...) instead of ~130 px.
+		// headerHeight was captured before makeParameterSection (safe).
+		// innerView.sizeHint is not affected by the contamination.
+		innerH = innerView.sizeHint.height;
+		windowTargetH = if(parameterSection.isKindOf(ScrollView), {
+			headerHeight + (Window.availableBounds.height * 0.5).asInteger
+		}, {
+			headerHeight + innerH + 4
+		});
+		contentView.fixedHeight_(windowTargetH);
+		contentView.maxHeight_(windowTargetH);
+		{
+			innerView.fixedHeight_(innerH);
+			contentView.fixedHeight_(windowTargetH);
+			contentView.maxHeight_(windowTargetH);
+		}.defer(0.07);
 	}
 
 	makeParameterViews {
@@ -407,6 +430,7 @@ NodeProxyGui2 {
 		if(nodeProxy.monitor.notNil and: { nodeProxy.rate == \audio }, {
 			volslider = Slider.new()
 			.orientation_(\horizontal)
+			.maxHeight_(26)
 			.value_(nodeProxy.vol)
 			.action_({ | obj |
 				nodeProxy.vol_(obj.value);
@@ -458,9 +482,10 @@ NodeProxyGui2 {
 
 			{ paramVal.isNumber } {
 
-				slider = Slider.new()
-				.orientation_(\horizontal)
-				.value_(spec.unmap(paramVal))
+			slider = Slider.new()
+			.orientation_(\horizontal)
+			.maxHeight_(26)
+			.value_(spec.unmap(paramVal))
 				.action_({ | obj |
 					var val = spec.map(obj.value);
 					valueBox.value = val;
@@ -485,10 +510,11 @@ NodeProxyGui2 {
 
 			{ collapseArrays.not and: { paramVal.isArray and: { paramVal.every(_.isNumber) } } } {
 
-				sliders = paramVal.collect { |val, n|
-					Slider.new()
-					.orientation_(\horizontal)
-					.value_(spec.wrapAt(n).unmap(val))
+			sliders = paramVal.collect { |val, n|
+				Slider.new()
+				.orientation_(\horizontal)
+				.maxHeight_(26)
+				.value_(spec.wrapAt(n).unmap(val))
 					.action_({ | obj |
 						var val = spec.wrapAt(n).map(obj.value);
 						valueBoxes[n].value = val;
