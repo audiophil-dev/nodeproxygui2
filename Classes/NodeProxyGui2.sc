@@ -12,7 +12,7 @@ NodeProxyGui2 {
 	var <window;
 
 	var play, volslider, volvalueBox;
-	var header, parameterSection;
+	var header, <parameterSection;
 	var contentView;
 	var updateInfoFunc;
 
