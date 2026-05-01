@@ -18,7 +18,6 @@ NodeProxyGui2 {
 
 	var font, headerFont, headerHeight;
 	var <paramSectionMaxHeight;
-	var embeddedSpacer;
 
 	var nodeProxyChangedFunc, specChangedFunc;
 
@@ -401,7 +400,6 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
-		embeddedSpacer !? { embeddedSpacer.remove; embeddedSpacer = nil };
 		innerView = this.makeParameterViews();
 		sectionSize = innerView.sizeHint;
 		innerH = sectionSize.height;
@@ -413,23 +411,18 @@ NodeProxyGui2 {
 		// Size the viewport to exactly fit content, capped at paramSectionMaxHeight.
 		// When innerH <= cap: viewport == content, no scroll bars appear.
 		// When innerH >  cap: viewport is capped, scroll bars appear as needed.
-		// In embedded mode the embeddedSpacer (stretch=1) below absorbs any
-		// surplus height the host provides beyond the pinned ScrollView.
 		parameterSection.fixedHeight_(innerH.min(paramSectionMaxHeight));
-		contentView.layout.add(parameterSection, 1);
+		contentView.layout.add(parameterSection);
 
 		windowTargetH = headerHeight + innerH.min(paramSectionMaxHeight) + 4;
 		// If embedded, the host controls contentView's height via fixedHeight_.
 		// Do not set fixedHeight_ here — doing so (even to 1) collapses the
 		// VLayout and leaves the ScrollView with a broken viewport geometry that
 		// persists after the host expands contentView.
-		if(contentView.parent.notNil, {
-			// A stretch spacer below the parameter section collects any
-			// surplus height the host provides, keeping the header and
-			// parameterSection flush at the top.
-			embeddedSpacer = View.new();
-			contentView.layout.add(embeddedSpacer, 1);
-		}, {
+		// Do NOT add a stretch spacer here: parameterSection.fixedHeight_ already
+		// prevents the ScrollView from stretching, and a stretch=1 spacer inflates
+		// the outer container's preferred height before the host pins contentView.
+		if(contentView.parent.isNil, {
 			contentView.fixedHeight_(windowTargetH);
 			contentView.maxHeight_(windowTargetH);
 		});
