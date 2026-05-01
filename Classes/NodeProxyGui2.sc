@@ -413,15 +413,17 @@ NodeProxyGui2 {
 		// When innerH >  cap: viewport is capped, scroll bars appear as needed.
 		parameterSection.fixedHeight_(innerH.min(paramSectionMaxHeight));
 		contentView.layout.add(parameterSection);
+		// Absorb VLayout surplus with a nil stretch spacer.
+		// Without this, Qt distributes the surplus as equal margins above, between,
+		// and below all items — producing visible blank space above the header.
+		// nil, 1 adds no sizeHint so it does not inflate the outer container.
+		contentView.layout.add(nil, 1);
 
 		windowTargetH = headerHeight + innerH.min(paramSectionMaxHeight) + 4;
 		// If embedded, the host controls contentView's height via fixedHeight_.
 		// Do not set fixedHeight_ here — doing so (even to 1) collapses the
 		// VLayout and leaves the ScrollView with a broken viewport geometry that
 		// persists after the host expands contentView.
-		// Do NOT add a stretch spacer here: parameterSection.fixedHeight_ already
-		// prevents the ScrollView from stretching, and a stretch=1 spacer inflates
-		// the outer container's preferred height before the host pins contentView.
 		if(contentView.parent.isNil, {
 			contentView.fixedHeight_(windowTargetH);
 			contentView.maxHeight_(windowTargetH);
