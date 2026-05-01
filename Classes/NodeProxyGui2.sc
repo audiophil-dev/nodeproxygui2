@@ -406,22 +406,16 @@ NodeProxyGui2 {
 		sectionSize = innerView.sizeHint;
 		innerH = sectionSize.height;
 
-		// Pin the inner view height BEFORE canvas_() so the ScrollView
-		// canvas does not collapse to the zero-sized viewport of the
-		// freshly created ScrollView.
+		// Pin the inner view height BEFORE canvas_() so the canvas does not
+		// collapse to the zero-sized viewport of the freshly created ScrollView.
 		innerView.fixedHeight_(innerH);
 		parameterSection = ScrollView.new().canvas_(innerView);
-		// On macOS scroll bars are overlay and only appear when scrolling,
-		// so there is no visible chrome when content fits without scrolling.
-		// In embedded mode the host layout controls available height;
-		// skip maxHeight_ so the ScrollView can expand to fill it.
-		// minHeight_(0) stops the ScrollView sizeHint from inflating the
-		// parent layout before the host pins contentView.
-		if(contentView.parent.notNil, {
-			parameterSection.minHeight_(0);
-		}, {
-			parameterSection.maxHeight_(paramSectionMaxHeight);
-		});
+		// Size the viewport to exactly fit content, capped at paramSectionMaxHeight.
+		// When innerH <= cap: viewport == content, no scroll bars appear.
+		// When innerH >  cap: viewport is capped, scroll bars appear as needed.
+		// In embedded mode the embeddedSpacer (stretch=1) below absorbs any
+		// surplus height the host provides beyond the pinned ScrollView.
+		parameterSection.fixedHeight_(innerH.min(paramSectionMaxHeight));
 		contentView.layout.add(parameterSection, 1);
 
 		windowTargetH = headerHeight + innerH.min(paramSectionMaxHeight) + 4;
