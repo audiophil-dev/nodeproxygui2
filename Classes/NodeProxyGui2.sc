@@ -12,14 +12,12 @@ NodeProxyGui2 {
 	var <window;
 
 	var play, volslider, volvalueBox;
-	var header, <parameterSection;
+	var header, <parameterSection, stretchSpacer;
 	var updateInfoFunc;
 	var <contentView;
 
-	var font, headerFont, headerHeight;
+	var font, headerFont, <headerHeight;
 	var <paramSectionMaxHeight;
-	var embedded;
-	var embeddedSpacer;
 
 	var nodeProxyChangedFunc, specChangedFunc;
 
@@ -29,8 +27,6 @@ NodeProxyGui2 {
 	}
 
 	init { | limitUpdateRate, show, showInfo, showTransport |
-
-		embedded = false;
 
 		this.initFonts();
 
@@ -63,22 +59,15 @@ NodeProxyGui2 {
 
 		this.setUpDependencies(limitUpdateRate.max(0));
 
-		this.makeParameterSection();
-
-		if(show) {
-			window.front;
-		}
+		// Defer so the caller has a chance to add contentView to a host
+		// layout before makeParameterSection checks contentView.parent.
+		{
+			this.makeParameterSection();
+			if(show) { window.front };
+		}.defer;
 	}
 
 	asView { ^contentView }
-
-	// When true, the host layout controls contentView's height.
-	// fixedHeight_ / maxHeight_ on contentView and parameterSection are
-	// skipped so the parent layout's stretch factor takes effect.
-	// Call this before makeParameterSection runs (i.e. before excludeParams_).
-	embedded_ { | flag |
-		embedded = flag;
-	}
 
 	// Override the maximum height of the parameter scroll area.
 	// Call this before excludeParams_ when embedding NPG2 inside a
@@ -353,7 +342,7 @@ NodeProxyGui2 {
 	makeParameterSection {
 		var excluded = defaultExcludeParams ++ prExcludeParams;
 		var numParams = params.flatSize;
-		var innerView, innerH, windowTargetH;
+		var sectionSize, innerView, innerH, windowTargetH;
 
 		params.do{ | spec | spec.removeDependant(specChangedFunc) };
 		params.clear;
@@ -391,50 +380,37 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
-		embeddedSpacer !? { embeddedSpacer.remove; embeddedSpacer = nil };
-		innerView = this.makeParameterViews().resizeToHint;
-		innerH = innerView.sizeHint.height;
-		// Pin height to sizeHint so sliders cannot grow when the parent layout
-		// distributes surplus vertical space. When the natural height exceeds
-		// paramSectionMaxHeight, a ScrollView provides the necessary overflow
-		// container.
-		if(innerH > paramSectionMaxHeight, {
-			innerView.fixedHeight_(innerH);
-			parameterSection = ScrollView.new().canvas_(innerView);
-			if(embedded.not, {
-				parameterSection.maxHeight_(paramSectionMaxHeight);
-			});
-			contentView.layout.add(parameterSection, 1);
-		}, {
-			parameterSection = innerView;
-			// Pin innerView so sliders cannot grow when the parent layout
-			// distributes surplus vertical space.
-			innerView.fixedHeight_(innerH);
-			contentView.layout.add(parameterSection, 0);
-		});
+		if(stretchSpacer.notNil, { stretchSpacer.remove });
+		innerView = this.makeParameterViews();
+		sectionSize = innerView.sizeHint;
+		innerH = sectionSize.height;
 
-		windowTargetH = if(parameterSection.isKindOf(ScrollView), {
-			headerHeight + innerH.min(paramSectionMaxHeight) + 30
-		}, {
-			contentView.sizeHint.height
-		});
-		if(embedded, {
-			// Add a tracked stretch spacer so any surplus height the host assigns
-			// collects at the bottom instead of being distributed between
-			// header and parameter sections. Tracked so it can be removed on
-			// each rebuild triggered by paramSectionMaxHeight_ or excludeParams_.
-			embeddedSpacer = View.new();
-			contentView.layout.add(embeddedSpacer, 1);
-			// Pin contentView to a minimal height so its sizeHint does not
-			// inflate the host layout. The host will call fixedHeight_(h)
-			// with the actual available height after layout settles.
-			contentView.fixedHeight_(1);
-		}, {
+		// Pin the inner view height BEFORE canvas_() so the canvas does not
+		// collapse to the zero-sized viewport of the freshly created ScrollView.
+		innerView.fixedHeight_(innerH);
+		parameterSection = ScrollView.new().canvas_(innerView);
+		// Size the viewport to exactly fit content, capped at paramSectionMaxHeight.
+		// When innerH <= cap: viewport == content, no scroll bars appear.
+		// When innerH >  cap: viewport is capped, scroll bars appear as needed.
+		parameterSection.fixedHeight_(innerH.min(paramSectionMaxHeight));
+		contentView.layout.add(parameterSection);
+		// Absorb VLayout surplus with a tracked stretch View.
+		// Using a stored reference allows removal on repeated makeParameterSection
+		// calls — nil,1 cannot be removed and accumulates, causing layout gaps.
+		stretchSpacer = View.new();
+		contentView.layout.add(stretchSpacer, 1);
+
+		windowTargetH = headerHeight + innerH.min(paramSectionMaxHeight) + 4;
+		// If embedded, the host controls contentView's height via fixedHeight_.
+		// Do not set fixedHeight_ here — doing so (even to 1) collapses the
+		// VLayout and leaves the ScrollView with a broken viewport geometry that
+		// persists after the host expands contentView.
+		if(contentView.parent.isNil, {
 			contentView.fixedHeight_(windowTargetH);
 			contentView.maxHeight_(windowTargetH);
 		});
 
-		if(embedded.not and: { window.view.parent.isNil }, {
+		if(window.view.parent.isNil and: { contentView.parent.isNil }, {
 			window.view.bounds = window.view.bounds.resizeTo(
 				window.view.bounds.width,
 				windowTargetH.min(Window.availableBounds.height)
@@ -442,7 +418,7 @@ NodeProxyGui2 {
 		});
 		// Deferred re-pin to counter Qt layout engine sizeHint contamination
 		// across multiple windows created in sequence.
-		if(embedded.not, {
+		if(contentView.parent.isNil, {
 			{
 				innerView.fixedHeight_(innerH);
 				contentView.fixedHeight_(windowTargetH);
