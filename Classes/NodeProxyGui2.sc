@@ -423,6 +423,9 @@ NodeProxyGui2 {
 			});
 		}, {
 			// Content fits without scrolling — use innerView directly.
+			// Pin height so the parent VLayout does not stretch the view
+			// (and its slider children) to fill remaining space.
+			innerView.fixedHeight_(innerH);
 			parameterSection = innerView;
 		});
 		contentView.layout.add(parameterSection, 1);
