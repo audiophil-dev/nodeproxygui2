@@ -406,27 +406,21 @@ NodeProxyGui2 {
 		sectionSize = innerView.sizeHint;
 		innerH = sectionSize.height;
 
-		// Only wrap in a ScrollView when the content is taller than the cap.
-		// When it fits, add innerView directly so no spurious scroll chrome appears.
-		if(innerH > paramSectionMaxHeight, {
-			// Pin inner view height BEFORE canvas_() so the canvas does not
-			// collapse to the zero-sized viewport of the freshly created ScrollView.
-			innerView.fixedHeight_(innerH);
-			parameterSection = ScrollView.new().canvas_(innerView);
-			// In embedded mode the host controls height; skip maxHeight_ so the
-			// ScrollView can expand to fill it.  minHeight_(0) stops its sizeHint
-			// from inflating the parent layout before the host pins contentView.
-			if(contentView.parent.notNil, {
-				parameterSection.minHeight_(0);
-			}, {
-				parameterSection.maxHeight_(paramSectionMaxHeight);
-			});
+		// Pin the inner view height BEFORE canvas_() so the ScrollView
+		// canvas does not collapse to the zero-sized viewport of the
+		// freshly created ScrollView.
+		innerView.fixedHeight_(innerH);
+		parameterSection = ScrollView.new().canvas_(innerView);
+		// On macOS scroll bars are overlay and only appear when scrolling,
+		// so there is no visible chrome when content fits without scrolling.
+		// In embedded mode the host layout controls available height;
+		// skip maxHeight_ so the ScrollView can expand to fill it.
+		// minHeight_(0) stops the ScrollView sizeHint from inflating the
+		// parent layout before the host pins contentView.
+		if(contentView.parent.notNil, {
+			parameterSection.minHeight_(0);
 		}, {
-			// Content fits without scrolling — use innerView directly.
-			// Pin height so the parent VLayout does not stretch the view
-			// (and its slider children) to fill remaining space.
-			innerView.fixedHeight_(innerH);
-			parameterSection = innerView;
+			parameterSection.maxHeight_(paramSectionMaxHeight);
 		});
 		contentView.layout.add(parameterSection, 1);
 
