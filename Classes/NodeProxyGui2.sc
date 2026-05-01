@@ -12,11 +12,13 @@ NodeProxyGui2 {
 	var <window;
 
 	var play, volslider, volvalueBox;
-	var header, parameterSection;
-	var contentView;
+	var header, <parameterSection;
 	var updateInfoFunc;
+	var <contentView;
 
 	var font, headerFont, headerHeight;
+	var <paramSectionMaxHeight;
+	var embedded;
 
 	var nodeProxyChangedFunc, specChangedFunc;
 
@@ -26,6 +28,8 @@ NodeProxyGui2 {
 	}
 
 	init { | limitUpdateRate, show, showInfo, showTransport |
+
+		embedded = false;
 
 		this.initFonts();
 
@@ -54,6 +58,7 @@ NodeProxyGui2 {
 
 		contentView.children.do{ | c | c.font = if(c == header, headerFont, font) };
 		headerHeight = contentView.sizeHint.height;
+		paramSectionMaxHeight = (Window.availableBounds.height * 0.5).asInteger;
 
 		this.setUpDependencies(limitUpdateRate.max(0));
 
@@ -65,6 +70,23 @@ NodeProxyGui2 {
 	}
 
 	asView { ^contentView }
+
+	// When true, the host layout controls contentView's height.
+	// fixedHeight_ / maxHeight_ on contentView and parameterSection are
+	// skipped so the parent layout's stretch factor takes effect.
+	// Call this before makeParameterSection runs (i.e. before excludeParams_).
+	embedded_ { | flag |
+		embedded = flag;
+	}
+
+	// Override the maximum height of the parameter scroll area.
+	// Call this before excludeParams_ when embedding NPG2 inside a
+	// height-constrained host layout. The change takes effect on the
+	// next makeParameterSection call.
+	paramSectionMaxHeight_ { | height |
+		paramSectionMaxHeight = height.asInteger;
+		{ this.makeParameterSection }.defer;
+	}
 
 	setUpDependencies { | limitUpdateRate |
 		var limitOrder, limitDict, limitScheduler;
@@ -369,44 +391,53 @@ NodeProxyGui2 {
 
 		if(parameterSection.notNil, { parameterSection.remove });
 		innerView = this.makeParameterViews().resizeToHint;
+		innerH = innerView.sizeHint.height;
 		// Pin height to sizeHint so sliders cannot grow when the parent layout
 		// distributes surplus vertical space. When the natural height exceeds
-		// half the screen, a ScrollView provides the necessary overflow container.
-		if(innerView.sizeHint.height > (Window.availableBounds.height * 0.5), {
+		// paramSectionMaxHeight, a ScrollView provides the necessary overflow
+		// container.
+		if(innerH > paramSectionMaxHeight, {
+			innerView.fixedHeight_(innerH);
 			parameterSection = ScrollView.new().canvas_(innerView);
-			parameterSection.maxHeight_((Window.availableBounds.height * 0.5).asInteger);
+			if(embedded.not, {
+				parameterSection.maxHeight_(paramSectionMaxHeight);
+			});
 			contentView.layout.add(parameterSection, 1);
 		}, {
 			parameterSection = innerView;
 			contentView.layout.add(parameterSection, 0);
 		});
-		// Compute target height from known-reliable parts rather than
-		// contentView.sizeHint.height. When multiple NodeProxyGui2 windows are
-		// created in sequence, Qt's layout engine contaminates subsequent
-		// sizeHint queries with previously fixed window heights, causing
-		// accumulated values (150, 262, 374 px, ...) instead of ~130 px.
-		// headerHeight was captured before makeParameterSection (safe).
-		// innerView.sizeHint is not affected by the contamination.
-		innerH = innerView.sizeHint.height;
+
 		windowTargetH = if(parameterSection.isKindOf(ScrollView), {
-			headerHeight + (Window.availableBounds.height * 0.5).asInteger
+			headerHeight + paramSectionMaxHeight
 		}, {
 			headerHeight + innerH + 4
 		});
-		contentView.fixedHeight_(windowTargetH);
-		contentView.maxHeight_(windowTargetH);
-		// Resize the window to match when running standalone (not embedded).
-		// When embedded, contentView will be reparented by the host layout;
-		// resizing the (hidden) window is harmless in that case.
-		window.view.bounds = window.view.bounds.resizeTo(
-			window.view.bounds.width,
-			windowTargetH.min(Window.availableBounds.height)
-		);
-		{
-			innerView.fixedHeight_(innerH);
+		if(embedded, {
+			// Pin contentView to a minimal height so its sizeHint does not
+			// inflate the host layout. The host will call fixedHeight_(h)
+			// with the actual available height after layout settles.
+			contentView.fixedHeight_(1);
+		}, {
 			contentView.fixedHeight_(windowTargetH);
 			contentView.maxHeight_(windowTargetH);
-		}.defer(0.07);
+		});
+
+		if(embedded.not and: { window.view.parent.isNil }, {
+			window.view.bounds = window.view.bounds.resizeTo(
+				window.view.bounds.width,
+				windowTargetH.min(Window.availableBounds.height)
+			);
+		});
+		// Deferred re-pin to counter Qt layout engine sizeHint contamination
+		// across multiple windows created in sequence.
+		if(embedded.not, {
+			{
+				innerView.fixedHeight_(innerH);
+				contentView.fixedHeight_(windowTargetH);
+				contentView.maxHeight_(windowTargetH);
+			}.defer(0.07);
+		});
 	}
 
 	makeParameterViews {
