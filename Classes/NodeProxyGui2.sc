@@ -19,6 +19,7 @@ NodeProxyGui2 {
 	var font, headerFont, headerHeight;
 	var <paramSectionMaxHeight;
 	var embedded;
+	var embeddedSpacer;
 
 	var nodeProxyChangedFunc, specChangedFunc;
 
@@ -390,6 +391,7 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
+		embeddedSpacer !? { embeddedSpacer.remove; embeddedSpacer = nil };
 		innerView = this.makeParameterViews().resizeToHint;
 		innerH = innerView.sizeHint.height;
 		// Pin height to sizeHint so sliders cannot grow when the parent layout
@@ -417,10 +419,12 @@ NodeProxyGui2 {
 			contentView.sizeHint.height
 		});
 		if(embedded, {
-			// Add a stretch spacer so any surplus height the host assigns
+			// Add a tracked stretch spacer so any surplus height the host assigns
 			// collects at the bottom instead of being distributed between
-			// header and parameter sections.
-			contentView.layout.add(nil, 1);
+			// header and parameter sections. Tracked so it can be removed on
+			// each rebuild triggered by paramSectionMaxHeight_ or excludeParams_.
+			embeddedSpacer = View.new();
+			contentView.layout.add(embeddedSpacer, 1);
 			// Pin contentView to a minimal height so its sizeHint does not
 			// inflate the host layout. The host will call fixedHeight_(h)
 			// with the actual available height after layout settles.
