@@ -12,7 +12,7 @@ NodeProxyGui2 {
 	var <window;
 
 	var play, volslider, volvalueBox;
-	var header, <parameterSection;
+	var header, <parameterSection, stretchSpacer;
 	var updateInfoFunc;
 	var <contentView;
 
@@ -400,6 +400,7 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
+		if(stretchSpacer.notNil, { stretchSpacer.remove });
 		innerView = this.makeParameterViews();
 		sectionSize = innerView.sizeHint;
 		innerH = sectionSize.height;
@@ -413,11 +414,11 @@ NodeProxyGui2 {
 		// When innerH >  cap: viewport is capped, scroll bars appear as needed.
 		parameterSection.fixedHeight_(innerH.min(paramSectionMaxHeight));
 		contentView.layout.add(parameterSection);
-		// Absorb VLayout surplus with a nil stretch spacer.
-		// Without this, Qt distributes the surplus as equal margins above, between,
-		// and below all items — producing visible blank space above the header.
-		// nil, 1 adds no sizeHint so it does not inflate the outer container.
-		contentView.layout.add(nil, 1);
+		// Absorb VLayout surplus with a tracked stretch View.
+		// Using a stored reference allows removal on repeated makeParameterSection
+		// calls — nil,1 cannot be removed and accumulates, causing layout gaps.
+		stretchSpacer = View.new();
+		contentView.layout.add(stretchSpacer, 1);
 
 		windowTargetH = headerHeight + innerH.min(paramSectionMaxHeight) + 4;
 		// If embedded, the host controls contentView's height via fixedHeight_.
