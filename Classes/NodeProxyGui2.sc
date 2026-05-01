@@ -12,10 +12,13 @@ NodeProxyGui2 {
 	var <window;
 
 	var play, volslider, volvalueBox;
-	var header, parameterSection;
+	var header, <parameterSection;
 	var updateInfoFunc;
+	var <contentView;
 
 	var font, headerFont, headerHeight;
+	var <paramSectionMaxHeight;
+	var embedded;
 
 	var nodeProxyChangedFunc, specChangedFunc;
 
@@ -26,20 +29,25 @@ NodeProxyGui2 {
 
 	init { | limitUpdateRate, show |
 
+		embedded = false;
+
 		this.initFonts();
 
 		params = IdentityDictionary.new();
 		paramViews = IdentityDictionary.new();
 
 		window = Window.new(nodeProxy.key);
-		window.layout = VLayout.new(
+		contentView = View.new();
+		contentView.layout = VLayout.new(
 			this.makeInfoSection(),
 			this.makeTransportSection(),
 			// parameterSection gets added here in makeParameterSection
 		);
+		window.layout = VLayout(contentView);
 
-		window.view.children.do{ | c | c.font = if(c == header, headerFont, font) };
-		headerHeight = window.view.sizeHint.height;
+		contentView.children.do{ | c | c.font = if(c == header, headerFont, font) };
+		headerHeight = contentView.sizeHint.height;
+		paramSectionMaxHeight = (Window.availableBounds.height * 0.5).asInteger;
 
 		this.setUpDependencies(limitUpdateRate.max(0));
 
@@ -50,7 +58,24 @@ NodeProxyGui2 {
 		}
 	}
 
-	asView { ^window.asView }
+	asView { ^contentView }
+
+	// When true, the host layout controls contentView's height.
+	// fixedHeight_ / maxHeight_ on contentView and parameterSection are
+	// skipped so the parent layout's stretch factor takes effect.
+	// Call this before makeParameterSection runs (i.e. before excludeParams_).
+	embedded_ { | flag |
+		embedded = flag;
+	}
+
+	// Override the maximum height of the parameter scroll area.
+	// Call this before excludeParams_ when embedding NPG2 inside a
+	// height-constrained host layout. The change takes effect on the
+	// next makeParameterSection call.
+	paramSectionMaxHeight_ { | height |
+		paramSectionMaxHeight = height.asInteger;
+		{ this.makeParameterSection }.defer;
+	}
 
 	setUpDependencies { | limitUpdateRate |
 		var limitOrder, limitDict, limitScheduler;
@@ -347,7 +372,7 @@ NodeProxyGui2 {
 	makeParameterSection {
 		var excluded = defaultExcludeParams ++ prExcludeParams;
 		var numParams = params.flatSize;
-		var sectionSize;
+		var sectionSize, innerView, innerH, windowTargetH;
 
 		params.do{ | spec | spec.removeDependant(specChangedFunc) };
 		params.clear;
@@ -385,16 +410,42 @@ NodeProxyGui2 {
 		};
 
 		if(parameterSection.notNil, { parameterSection.remove });
-		parameterSection = this.makeParameterViews();
-		sectionSize = parameterSection.sizeHint;
-		parameterSection = ScrollView.new().canvas_(parameterSection);
-		window.layout.add(parameterSection, 1);
+		innerView = this.makeParameterViews();
+		sectionSize = innerView.sizeHint;
+		innerH = sectionSize.height;
 
-		if(window.view.parent.isNil, {  //resize only when not embedded
+		// Pin the inner view height BEFORE canvas_() so the ScrollView
+		// canvas does not collapse to the zero-sized viewport of the
+		// freshly created ScrollView.
+		innerView.fixedHeight_(innerH);
+		parameterSection = ScrollView.new().canvas_(innerView);
+		// In embedded mode the host layout controls available height;
+		// maxHeight_ would prevent the ScrollView from expanding.
+		// However, set minHeight_(0) and maxHeight_ on the ScrollView
+		// so its sizeHint does not inflate the parent layout.
+		if(embedded, {
+			parameterSection.minHeight_(0);
+		}, {
+			parameterSection.maxHeight_(paramSectionMaxHeight);
+		});
+		contentView.layout.add(parameterSection, 1);
+
+		windowTargetH = headerHeight + innerH.min(paramSectionMaxHeight) + 4;
+		// In embedded mode the host controls contentView's height.
+		if(embedded, {
+			// Pin contentView to a minimal height so its sizeHint does not
+			// inflate the host layout. The host will call fixedHeight_(h)
+			// with the actual available height after layout settles.
+			contentView.fixedHeight_(1);
+		}, {
+			contentView.fixedHeight_(windowTargetH);
+			contentView.maxHeight_(windowTargetH);
+		});
+
+		if(embedded.not and: { window.view.parent.isNil }, {
 			window.view.bounds = window.view.bounds.resizeTo(
 				window.view.bounds.width,
-				(sectionSize.height + headerHeight + 30)  //30 compensate default spacing
-				.min(Window.availableBounds.height)
+				windowTargetH.min(Window.availableBounds.height)
 			);
 		});
 	}
