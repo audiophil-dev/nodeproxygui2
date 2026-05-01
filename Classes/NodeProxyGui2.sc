@@ -41,7 +41,7 @@ NodeProxyGui2 {
 		contentView.layout = VLayout.new(
 			// parameterSection gets added here in makeParameterSection
 		);
-		window.layout = VLayout(contentView);
+		window.layout = VLayout(contentView).margins_(0);
 
 		if (showInfo) {
 			contentView.layout.add(this.makeInfoSection())
@@ -405,15 +405,22 @@ NodeProxyGui2 {
 			contentView.layout.add(parameterSection, 1);
 		}, {
 			parameterSection = innerView;
+			// Pin innerView so sliders cannot grow when the parent layout
+			// distributes surplus vertical space.
+			innerView.fixedHeight_(innerH);
 			contentView.layout.add(parameterSection, 0);
 		});
 
 		windowTargetH = if(parameterSection.isKindOf(ScrollView), {
-			headerHeight + paramSectionMaxHeight
+			headerHeight + innerH.min(paramSectionMaxHeight) + 30
 		}, {
-			headerHeight + innerH + 4
+			contentView.sizeHint.height
 		});
 		if(embedded, {
+			// Add a stretch spacer so any surplus height the host assigns
+			// collects at the bottom instead of being distributed between
+			// header and parameter sections.
+			contentView.layout.add(nil, 1);
 			// Pin contentView to a minimal height so its sizeHint does not
 			// inflate the host layout. The host will call fixedHeight_(h)
 			// with the actual available height after layout settles.
@@ -436,6 +443,11 @@ NodeProxyGui2 {
 				innerView.fixedHeight_(innerH);
 				contentView.fixedHeight_(windowTargetH);
 				contentView.maxHeight_(windowTargetH);
+				// Pin window view to exact target height so sliders cannot
+				// grow when Qt distributes surplus space (no-scroll path).
+				if(parameterSection.isKindOf(ScrollView).not, {
+					window.view.fixedHeight_(windowTargetH);
+				});
 			}.defer(0.07);
 		});
 	}
