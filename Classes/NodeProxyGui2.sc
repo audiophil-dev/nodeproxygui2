@@ -406,19 +406,24 @@ NodeProxyGui2 {
 		sectionSize = innerView.sizeHint;
 		innerH = sectionSize.height;
 
-		// Pin the inner view height BEFORE canvas_() so the ScrollView
-		// canvas does not collapse to the zero-sized viewport of the
-		// freshly created ScrollView.
-		innerView.fixedHeight_(innerH);
-		parameterSection = ScrollView.new().canvas_(innerView);
-		// In embedded mode the host layout controls available height;
-		// skip maxHeight_ so the ScrollView can expand to fill it.
-		// Set minHeight_(0) so the ScrollView's sizeHint does not
-		// inflate the parent layout before the host pins contentView.
-		if(contentView.parent.notNil, {
-			parameterSection.minHeight_(0);
+		// Only wrap in a ScrollView when the content is taller than the cap.
+		// When it fits, add innerView directly so no spurious scroll chrome appears.
+		if(innerH > paramSectionMaxHeight, {
+			// Pin inner view height BEFORE canvas_() so the canvas does not
+			// collapse to the zero-sized viewport of the freshly created ScrollView.
+			innerView.fixedHeight_(innerH);
+			parameterSection = ScrollView.new().canvas_(innerView);
+			// In embedded mode the host controls height; skip maxHeight_ so the
+			// ScrollView can expand to fill it.  minHeight_(0) stops its sizeHint
+			// from inflating the parent layout before the host pins contentView.
+			if(contentView.parent.notNil, {
+				parameterSection.minHeight_(0);
+			}, {
+				parameterSection.maxHeight_(paramSectionMaxHeight);
+			});
 		}, {
-			parameterSection.maxHeight_(paramSectionMaxHeight);
+			// Content fits without scrolling — use innerView directly.
+			parameterSection = innerView;
 		});
 		contentView.layout.add(parameterSection, 1);
 
