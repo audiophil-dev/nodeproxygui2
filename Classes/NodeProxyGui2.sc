@@ -16,7 +16,7 @@ NodeProxyGui2 {
 	var updateInfoFunc;
 	var <contentView;
 
-	var font, headerFont, headerHeight;
+	var font, headerFont, <headerHeight;
 	var <paramSectionMaxHeight;
 
 	var nodeProxyChangedFunc, specChangedFunc;
