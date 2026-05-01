@@ -419,16 +419,16 @@ NodeProxyGui2 {
 		contentView.layout.add(parameterSection, 1);
 
 		windowTargetH = headerHeight + innerH.min(paramSectionMaxHeight) + 4;
-		// If embedded, the host controls contentView's height.
+		// If embedded, the host controls contentView's height via fixedHeight_.
+		// Do not set fixedHeight_ here — doing so (even to 1) collapses the
+		// VLayout and leaves the ScrollView with a broken viewport geometry that
+		// persists after the host expands contentView.
 		if(contentView.parent.notNil, {
 			// A stretch spacer below the parameter section collects any
 			// surplus height the host provides, keeping the header and
 			// parameterSection flush at the top.
 			embeddedSpacer = View.new();
 			contentView.layout.add(embeddedSpacer, 1);
-			// Pin contentView to a minimal height so its sizeHint does not
-			// inflate the host layout before the host calls fixedHeight_(h).
-			contentView.fixedHeight_(1);
 		}, {
 			contentView.fixedHeight_(windowTargetH);
 			contentView.maxHeight_(windowTargetH);
