@@ -18,6 +18,7 @@ NodeProxyGui2 {
 
 	var font, headerFont, <headerHeight;
 	var <paramSectionMaxHeight;
+	var <fontSize, <sliderHeight, <sliderWidth;
 
 	var nodeProxyChangedFunc, specChangedFunc;
 
@@ -445,6 +446,7 @@ NodeProxyGui2 {
 				nodeProxy.vol_(obj.value);
 				volvalueBox.value_(obj.value);
 			});
+			sliderHeight !? { volslider.fixedHeight_(sliderHeight) };
 
 			vollabel = StaticText.new
 			.string_("vol");
@@ -491,14 +493,16 @@ NodeProxyGui2 {
 
 			{ paramVal.isNumber } {
 
-				slider = Slider.new()
-				.orientation_(\horizontal)
-				.value_(spec.unmap(paramVal))
-				.action_({ | obj |
-					var val = spec.map(obj.value);
-					valueBox.value = val;
-					nodeProxy.set(key, val);
-				});
+			slider = Slider.new()
+			.orientation_(\horizontal)
+			.value_(spec.unmap(paramVal))
+			.action_({ | obj |
+				var val = spec.map(obj.value);
+				valueBox.value = val;
+				nodeProxy.set(key, val);
+			});
+			sliderHeight !? { slider.fixedHeight_(sliderHeight) };
+			sliderWidth  !? { slider.fixedWidth_(sliderWidth) };
 
 				valueBox = NumberBox.new()
 				.action_({ | obj |
@@ -518,16 +522,18 @@ NodeProxyGui2 {
 
 			{ collapseArrays.not and: { paramVal.isArray and: { paramVal.every(_.isNumber) } } } {
 
-				sliders = paramVal.collect { |val, n|
-					Slider.new()
-					.orientation_(\horizontal)
-					.value_(spec.wrapAt(n).unmap(val))
-					.action_({ | obj |
-						var val = spec.wrapAt(n).map(obj.value);
-						valueBoxes[n].value = val;
-						nodeProxy.seti(key, n, val);
-					});
-				};
+			sliders = paramVal.collect { |val, n|
+				Slider.new()
+				.orientation_(\horizontal)
+				.value_(spec.wrapAt(n).unmap(val))
+				.action_({ | obj |
+					var val = spec.wrapAt(n).map(obj.value);
+					valueBoxes[n].value = val;
+					nodeProxy.seti(key, n, val);
+				});
+			};
+			sliderHeight !? { sliders.do(_.fixedHeight_(sliderHeight)) };
+			sliderWidth  !? { sliders.do(_.fixedWidth_(sliderWidth)) };
 
 				valueBoxes = paramVal.collect { |pVal, n|
 					NumberBox.new()
@@ -644,13 +650,30 @@ NodeProxyGui2 {
 	}
 
 	initFonts {
-		var fontSize, headerFontSize;
+		var headerFontSize;
 
-		fontSize = 14;
+		fontSize = fontSize ?? { 14 };
 		headerFontSize = fontSize * 2;
 
 		headerFont = Font.sansSerif(headerFontSize, bold: true, italic: false);
 		font = Font.monospace(fontSize, bold: false, italic: false);
+	}
+
+	fontSize_ { | size |
+		fontSize = size;
+		this.initFonts();
+		{ contentView.children.do{ | c | c.font = if(c == header, headerFont, font) };
+		  this.makeParameterSection() }.defer;
+	}
+
+	sliderHeight_ { | height |
+		sliderHeight = height;
+		{ this.makeParameterSection() }.defer;
+	}
+
+	sliderWidth_ { | width |
+		sliderWidth = width;
+		{ this.makeParameterSection() }.defer;
 	}
 
 	randomize { | randmin = 0.0, randmax = 1.0 |
