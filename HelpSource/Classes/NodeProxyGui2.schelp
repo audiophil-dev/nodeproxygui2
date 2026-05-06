@@ -96,30 +96,6 @@ METHOD:: defaults
 Set parameters to LINK::Classes/ControlSpec:: default values. Specs are first looked up in the node proxy's spec, and then in CODE::Spec.specs::.
 NOTE::Parameters listed in either LINK::#-ignoreParams:: or in LINK::#*defaultIgnoreParams:: will be excluded.::
 
-METHOD:: fontSize
-Get or set the font size used for parameter labels and values. The header font is automatically scaled to twice this size. Updating this setter rebuilds the parameter section immediately.
-
-CODE::
-g = Ndef(\yiyi).gui2;
-g.fontSize = 18;
-::
-
-METHOD:: sliderHeight
-Get or set the fixed height (in pixels) applied to every horizontal slider in the GUI, including the vol slider. When code::nil:: (the default), sliders use their natural height from the layout.
-
-CODE::
-g = Ndef(\yiyi).gui2;
-g.sliderHeight = 30;
-::
-
-METHOD:: sliderWidth
-Get or set the fixed width (in pixels) applied to scalar-number and array sliders. When code::nil:: (the default), sliders stretch freely within their layout column. The vol slider width is not constrained by this setter.
-
-CODE::
-g = Ndef(\yiyi).gui2;
-g.sliderWidth = 200;
-::
-
 METHOD:: close
 Closes the window.
 
