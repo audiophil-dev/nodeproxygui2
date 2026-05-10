@@ -359,10 +359,10 @@ NodeProxyGui2 {
 
 				spec = case
 				{ val.isNumber } {
-					(nodeProxy.specs.at(key) ?? { Spec.specs.at(key) }).asSpec
+					(nodeProxy.specs.at(key) ?? { nodeProxy.respondsTo(\getSpec).if { nodeProxy.getSpec(key) } } ?? { Spec.specs.at(key) }).asSpec
 				}
 				{ val.isArray } {
-					(nodeProxy.specs.at(key) ?? { Spec.specs.at(key) }).asSpec.dup(val.size)
+					(nodeProxy.specs.at(key) ?? { nodeProxy.respondsTo(\getSpec).if { nodeProxy.getSpec(key) } } ?? { Spec.specs.at(key) }).asSpec.dup(val.size)
 				}
 				{ val.isKindOf(Bus) } {
 					if(val.rate == \control, { \controlbus }, { \audiobus }).asSpec
@@ -676,7 +676,7 @@ NodeProxyGui2 {
 			var spec;
 
 			if(this.paramPresentInArray(key, ignored).not, {
-				spec = (nodeProxy.specs.at(key) ?? { Spec.specs.at(key) }).asSpec;
+				spec = (nodeProxy.specs.at(key) ?? { nodeProxy.respondsTo(\getSpec).if { nodeProxy.getSpec(key) } } ?? { Spec.specs.at(key) }).asSpec;
 				if(val.isNumber, {
 					accepted.put(key, spec)
 				}, {
