@@ -40,7 +40,7 @@ ARGUMENT:: collapseArrays
 When CODE::true::, arrays of parameters will be shown as single line LINK::Classes/TextField::s. The default (CODE::false::) will show arrays of parameters as separate silders.
 
 ARGUMENT:: showInfo
-If CODE::false::, the info section (showing the node proxy name, fadeTime, channel count and rate) is hidden. When hidden and the node proxy has a key, a plain text header with the key is shown instead. Default is CODE::true::.
+If CODE::false::, the info section (showing fadeTime, channel count and rate) is hidden. When hidden and the node proxy has a key, a plain text header with the key is shown instead. Default is CODE::true::.
 
 ARGUMENT:: showTransport
 If CODE::false::, the transport section (play, clear, free, etc...) is hidden. Default is CODE::true::.
