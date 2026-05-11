@@ -19,6 +19,6 @@ ARGUMENT:: showInfo
 If CODE::false::, the info section (showing the node proxy name, fadeTime, channel count and rate) is hidden. Default is CODE::true::.
 
 ARGUMENT:: showTransport
-If CODE::false::, the transport section (play, stop, end, record buttons and volume slider) is hidden. Default is CODE::true::. Useful when the node proxy is controlled externally.
+If CODE::false::, the transport section (play, clear, free, etc...) is hidden. Default is CODE::true::.
 
 RETURNS:: a LINK::Classes/NodeProxyGui2:: instance.
